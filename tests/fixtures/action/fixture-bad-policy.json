@@ -1,0 +1,25 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyOtherRegions",
+      "Effect": "Deny",
+      "Action": "*",
+      "Resource": "*",
+      "Condition": {"StringNotEquals": {"aws:RequestedRegion": ["eu-west-1"]}}
+    },
+    {
+      "Sid": "AllowS3",
+      "Effect": "Allow",
+      "Action": "s3:*",
+      "Resource": "*"
+    },
+    {
+      "Sid": "ProtectCloudTrail",
+      "Effect": "Deny",
+      "Action": "cloudtrail:StopLogging",
+      "Resource": "*",
+      "Condition": {"StringNotEquals": {"aws:PrincipalArn": "arn:aws:iam::*:role/BreakGlass*"}}
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+# Sandbox OU example: the baseline guardrails plus spend denies.
+allowed_regions: [eu-west-1, us-east-1]
+protected_roles: [OrganizationAccountAccessRole, BreakGlassAdmin]
+deny_leave_organization: true
+deny_disable_security_services: true
+deny_root_user: true
+require_imdsv2: true
+deny_public_s3_acls: true
+require_instance_tag: Owner
+deny_instance_types: true
+max_volume_iops: 3000
+deny_volume_types: [io1, io2]
+sagemaker_instance_types: true
+deny_bedrock_customization: true
+deny_services: [redshift, redshift-serverless]
+deny_commitments: true
+protect_budgets: true

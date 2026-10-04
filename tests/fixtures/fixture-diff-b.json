@@ -1,0 +1,8 @@
+{"Version": "2012-10-17", "Statement": [
+  {"Sid": "ProtectCloudTrail", "Effect": "Deny", "Action": ["cloudtrail:StopLogging", "cloudtrail:DeleteTrail", "cloudtrail:UpdateTrail"], "Resource": "*",
+   "Condition": {"ArnNotLike": {"aws:PrincipalArn": ["arn:aws:iam::*:role/BreakGlassAdmin", "arn:aws:iam::*:role/SecurityAutomation"]}}},
+  {"Sid": "DenyOutsideAllowedRegions", "Effect": "Deny", "NotAction": ["IAM:*", "sts:*", "organizations:*"], "Resource": "*",
+   "Condition": {"StringNotEquals": {"aws:RequestedRegion": ["eu-west-1", "us-east-1"]}}},
+  {"Sid": "DenyRootUser", "Effect": "Deny", "Action": "*", "Resource": "*",
+   "Condition": {"StringLike": {"aws:PrincipalArn": "arn:aws:iam::*:root"}}}
+]}

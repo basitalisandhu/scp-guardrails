@@ -1,0 +1,7 @@
+{"Version": "2012-10-17", "Statement": [
+  {"Sid": "DenyOtherRegions", "Effect": "Deny",
+   "NotAction": ["iam:*", "sts:*", "organizations:*", "support:*", "route53:*", "cloudfront:*", "budgets:*", "health:*"],
+   "Resource": "*",
+   "Condition": {"StringNotEquals": {"aws:RequestedRegion": ["eu-west-1"]},
+                 "ArnNotLike": {"aws:PrincipalArn": ["arn:aws:iam::*:role/BreakGlassAdmin"]}}}
+]}

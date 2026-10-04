@@ -1,0 +1,2 @@
+{"Policy": {"PolicySummary": {"Id": "p-examplepolicyid111", "Name": "deny-leave", "Type": "SERVICE_CONTROL_POLICY", "AwsManaged": false},
+ "Content": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"DenyLeave\",\"Effect\":\"Deny\",\"Action\":\"organizations:LeaveOrganization\",\"Resource\":\"*\"}]}"}}

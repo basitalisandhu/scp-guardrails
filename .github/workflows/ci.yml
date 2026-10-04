@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install
+        run: python -m pip install -e ".[dev]" build
+      - name: Lint
+        run: |
+          ruff check .
+          ruff format --check .
+      - name: Test
+        run: python -m pytest -q
+      - name: Build the example specs, lint, plant a bad policy, diff and explain
+        run: |
+          rm -rf /tmp/scps && scp-guardrails build --spec examples/spec.yaml --out /tmp/scps
+          scp-guardrails build --spec examples/sandbox-spec.yaml --format markdown > /dev/null
+          scp-guardrails lint /tmp/scps --fail-on low
+          set +e
+          scp-guardrails lint tests/fixtures/action/fixture-bad-policy.json --sarif bad.sarif > /dev/null; test $? -eq 1 || exit 1
+          scp-guardrails lint does-not-exist.json > /dev/null 2>&1; test $? -eq 2 || exit 1
+          scp-guardrails diff tests/fixtures/fixture-diff-a.json tests/fixtures/fixture-diff-b.json; test $? -eq 1 || exit 1
+          set -e
+          python -c "import json; d=json.load(open('bad.sarif')); assert d['version']=='2.1.0' and d['runs'][0]['results']"
+          scp-guardrails explain /tmp/scps/scp-01.json > /dev/null
+          scp-guardrails catalog --format markdown | diff - docs/catalog.md
+      - name: Build and smoke-test the wheel
+        run: |
+          python -m build
+          python -m pip install --force-reinstall dist/*.whl
+          scp-guardrails --version
+          scp-guardrails catalog --format json | python -c "import json,sys; json.load(sys.stdin)"
+
+  container-build:
+    name: Build the container image and run it
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the image, print --help, build and lint from a mount
+        run: |
+          docker build --build-arg VERSION=ci -t scp-guardrails:ci .
+          docker run --rm scp-guardrails:ci --help > help.txt && grep "^usage: scp-guardrails" help.txt
+          docker run --rm scp-guardrails:ci --version
+          test "$(docker run --rm --entrypoint id scp-guardrails:ci -u)" = "1000"
+          mkdir -p out && chmod 777 out
+          docker run --rm -v "$PWD/examples:/examples:ro" -v "$PWD/out:/work" scp-guardrails:ci build --spec /examples/spec.yaml --out scps
+          docker run --rm -v "$PWD/out:/work" scp-guardrails:ci lint scps --fail-on low
+          set +e
+          docker run --rm -v "$PWD/tests/fixtures/action:/policies:ro" scp-guardrails:ci lint /policies/fixture-bad-policy.json; test $? -eq 1 || exit 1

@@ -1,0 +1,131 @@
+name: "SCP Guardrails Lint"
+description: "Lint AWS service control policies in pull requests: lockouts, region denies that break global services, dead conditions and size. Writes SARIF."
+author: "Muhammad Basit Ali (@basitalisandhu)"
+branding:
+  icon: shield
+  color: orange
+
+inputs:
+  path:
+    description: "Policy files to lint: a glob such as policies/**/*.json, a directory (every *.json below it) or a file. Several, one per line."
+    required: false
+    default: "**/scp*.json"
+  fail-on:
+    description: "Lowest severity that fails the job: low, medium, high or none. Findings below it are still reported."
+    required: false
+    default: "high"
+  sarif:
+    description: "Write a SARIF 2.1.0 report (true or false)."
+    required: false
+    default: "true"
+  sarif-file:
+    description: "Where to write the SARIF report."
+    required: false
+    default: "scp-guardrails.sarif"
+  upload-sarif:
+    description: "Upload the SARIF report to GitHub code scanning (true or false). Needs permissions security-events write; only used when sarif is true."
+    required: false
+    default: "true"
+  category:
+    description: "Code scanning category for the upload, so several runs can coexist in one repository."
+    required: false
+    default: "scp-guardrails"
+  break-glass-roles:
+    description: "Role names every aws:PrincipalArn exemption must cover, one per line."
+    required: false
+    default: ""
+  management-account:
+    description: "12-digit management account id, to flag conditions that name it (SCPs never apply there)."
+    required: false
+    default: ""
+  python-version:
+    description: "Python version to install with actions/setup-python. Empty uses the python3 on the runner (3.11 or newer is required)."
+    required: false
+    default: ""
+
+outputs:
+  finding-count:
+    description: "Findings at every severity."
+    value: ${{ steps.lint.outputs.finding-count }}
+  highest-severity:
+    description: "Highest severity found: high, medium, low or none."
+    value: ${{ steps.lint.outputs.highest-severity }}
+  gate:
+    description: "pass or fail, according to fail-on."
+    value: ${{ steps.lint.outputs.gate }}
+  file-count:
+    description: "Policy files linted."
+    value: ${{ steps.lint.outputs.file-count }}
+  sarif-file:
+    description: "Path of the SARIF report, empty when sarif is false."
+    value: ${{ steps.lint.outputs.sarif-file }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      if: ${{ inputs.python-version != '' }}
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Lint service control policies
+      id: lint
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        LINT_PATHS: ${{ inputs.path }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        SARIF: ${{ inputs.sarif }}
+        SARIF_FILE: ${{ inputs.sarif-file }}
+        BREAK_GLASS_ROLES: ${{ inputs.break-glass-roles }}
+        MANAGEMENT_ACCOUNT: ${{ inputs.management-account }}
+      run: |
+        set -uo pipefail
+        if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)'; then
+          echo "::error::scp-guardrails needs Python 3.11 or newer; set the python-version input."
+          exit 2
+        fi
+        # The linter runs from the action's own checkout, so it is pinned to the ref in `uses:`.
+        args=(lint --fail-on "$FAIL_ON" --summary "$GITHUB_STEP_SUMMARY" --github-output "$GITHUB_OUTPUT")
+        while IFS= read -r p; do
+          if [ -n "$p" ]; then args+=("$p"); fi
+        done <<< "$LINT_PATHS"
+        while IFS= read -r role; do
+          if [ -n "$role" ]; then args+=(--break-glass-role "$role"); fi
+        done <<< "$BREAK_GLASS_ROLES"
+        if [ -n "$MANAGEMENT_ACCOUNT" ]; then args+=(--management-account "$MANAGEMENT_ACCOUNT"); fi
+        if [ "$SARIF" = "true" ]; then
+          args+=(--sarif "$SARIF_FILE")
+          echo "sarif-file=$SARIF_FILE" >> "$GITHUB_OUTPUT"
+        else
+          echo "sarif-file=" >> "$GITHUB_OUTPUT"
+        fi
+        set +e
+        PYTHONPATH="$ACTION_PATH/src${PYTHONPATH:+:$PYTHONPATH}" python3 -m scp_guardrails "${args[@]}"
+        rc=$?
+        set -e
+        # 1 means the gate failed; the last step reports that after the SARIF upload. Anything else is an error.
+        if [ "$rc" -gt 1 ]; then
+          echo "::error::scp-guardrails exited with $rc (no policy files matched, or a file is not valid JSON)"
+          exit "$rc"
+        fi
+        exit 0
+
+    - name: Upload SARIF to code scanning
+      if: ${{ !cancelled() && steps.lint.outcome == 'success' && inputs.sarif == 'true' && inputs.upload-sarif == 'true' }}
+      uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+      with:
+        sarif_file: ${{ inputs.sarif-file }}
+        category: ${{ inputs.category }}
+
+    - name: Fail on findings at or above the threshold
+      if: ${{ steps.lint.outputs.gate == 'fail' }}
+      shell: bash
+      env:
+        COUNT: ${{ steps.lint.outputs.finding-count }}
+        HIGHEST: ${{ steps.lint.outputs.highest-severity }}
+        FAIL_ON: ${{ inputs.fail-on }}
+      run: |
+        echo "::error::scp-guardrails: $COUNT finding(s), highest severity $HIGHEST, threshold $FAIL_ON. See the job summary or the Security tab."
+        exit 1

@@ -1,0 +1,116 @@
+name: Action self-test
+
+# Runs the composite Action from this checkout (uses: ./) against the repository's own fixtures:
+#   - the planted bad policy must fail the gate (non-zero exit) and still write SARIF with results;
+#   - the good policy must pass with zero findings at the lowest threshold;
+#   - the policies the builder writes from examples/spec.yaml must pass at the lowest threshold;
+#   - a named break-glass role missing from an exemption must fail at medium.
+# SARIF upload is off here so planted findings never reach this repository's Security tab.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  self-test:
+    name: Run the Action on the fixtures
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Planted bad policy (gate must fail)
+        id: bad
+        uses: ./
+        continue-on-error: true
+        with:
+          path: tests/fixtures/action/fixture-bad-policy.json
+          fail-on: high
+          upload-sarif: "false"
+          sarif-file: bad.sarif
+
+      - name: Good policy (gate must pass at the lowest threshold)
+        id: good
+        uses: ./
+        with:
+          path: tests/fixtures/action/fixture-good-policy.json
+          fail-on: low
+          upload-sarif: "false"
+          sarif-file: good.sarif
+
+      - name: Build the example spec
+        run: PYTHONPATH=src python3 -m scp_guardrails build --spec examples/spec.yaml --out "$RUNNER_TEMP/built"
+
+      - name: Built policies by glob (gate must pass at the lowest threshold)
+        id: built
+        uses: ./
+        with:
+          path: ${{ runner.temp }}/built/scp-*.json
+          fail-on: low
+          upload-sarif: "false"
+          sarif-file: built.sarif
+
+      - name: Break-glass role not exempt (gate must fail at medium)
+        id: breakglass
+        uses: ./
+        continue-on-error: true
+        with:
+          path: tests/fixtures/fixture-break-glass.json
+          fail-on: medium
+          break-glass-roles: |
+            BreakGlassAdmin
+          upload-sarif: "false"
+          sarif-file: breakglass.sarif
+
+      - name: Check outcomes, outputs and SARIF
+        env:
+          BAD_OUTCOME: ${{ steps.bad.outcome }}
+          BAD_HIGHEST: ${{ steps.bad.outputs.highest-severity }}
+          BAD_GATE: ${{ steps.bad.outputs.gate }}
+          GOOD_OUTCOME: ${{ steps.good.outcome }}
+          GOOD_COUNT: ${{ steps.good.outputs.finding-count }}
+          GOOD_GATE: ${{ steps.good.outputs.gate }}
+          BUILT_OUTCOME: ${{ steps.built.outcome }}
+          BUILT_COUNT: ${{ steps.built.outputs.finding-count }}
+          BUILT_FILES: ${{ steps.built.outputs.file-count }}
+          BREAKGLASS_OUTCOME: ${{ steps.breakglass.outcome }}
+        run: |
+          set -eu
+          test "$BAD_OUTCOME" = "failure"
+          test "$BAD_HIGHEST" = "high"
+          test "$BAD_GATE" = "fail"
+          test "$GOOD_OUTCOME" = "success"
+          test "$GOOD_COUNT" = "0"
+          test "$GOOD_GATE" = "pass"
+          test "$BUILT_OUTCOME" = "success"
+          test "$BUILT_COUNT" = "0"
+          test "$BUILT_FILES" -ge 1
+          test "$BREAKGLASS_OUTCOME" = "failure"
+          python3 - <<'PY'
+          import json
+          def load(p):
+              d = json.load(open(p))
+              assert d["version"] == "2.1.0", p
+              return d["runs"][0]["results"]
+          bad = load("bad.sarif")
+          assert {r["ruleId"] for r in bad} >= {"SCP-REGION-BLOCKS-GLOBAL", "SCP-ALLOW-IN-DENY-LIST", "SCP-CONDITION-OPERATOR"}, bad
+          uris = {r["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] for r in bad}
+          assert uris == {"tests/fixtures/action/fixture-bad-policy.json"}, uris
+          assert load("good.sarif") == [], "good SARIF has results"
+          assert load("built.sarif") == [], "built SARIF has results"
+          assert [r["ruleId"] for r in load("breakglass.sarif")] == ["SCP-BREAK-GLASS-NOT-EXEMPT"]
+          print("self-test checks passed")
+          PY
+
+      - name: CLI exit codes from the checkout
+        run: |
+          set +e
+          PYTHONPATH=src python3 -m scp_guardrails lint tests/fixtures/action/fixture-bad-policy.json > /dev/null; test $? -eq 1 || exit 1
+          PYTHONPATH=src python3 -m scp_guardrails lint tests/fixtures/action/fixture-good-policy.json --fail-on low > /dev/null; test $? -eq 0 || exit 1
+          PYTHONPATH=src python3 -m scp_guardrails lint does-not-exist.json > /dev/null 2>&1; test $? -eq 2 || exit 1

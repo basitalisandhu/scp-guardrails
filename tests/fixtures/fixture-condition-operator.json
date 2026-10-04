@@ -1,0 +1,10 @@
+{"Version": "2012-10-17", "Statement": [
+  {"Sid": "ExemptAdminsWrongOperator", "Effect": "Deny", "Action": "cloudtrail:StopLogging", "Resource": "*",
+   "Condition": {"StringNotEquals": {"aws:PrincipalArn": ["arn:aws:iam::*:role/Admin*"]}}},
+  {"Sid": "ArnOperatorOnRegion", "Effect": "Deny", "Action": "ec2:RunInstances", "Resource": "*",
+   "Condition": {"ArnNotLike": {"aws:RequestedRegion": ["eu-west-1"]}}},
+  {"Sid": "NumericOnText", "Effect": "Deny", "Action": "ec2:CreateVolume", "Resource": "*",
+   "Condition": {"NumericGreaterThan": {"ec2:VolumeIops": "lots"}}},
+  {"Sid": "MadeUpOperator", "Effect": "Deny", "Action": "s3:PutBucketAcl", "Resource": "*",
+   "Condition": {"StringMaybe": {"s3:x-amz-acl": "public-read"}}}
+]}

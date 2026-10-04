@@ -1,0 +1,5 @@
+{"Version": "2012-10-17", "Statement": [
+  {"Sid": "DenyAllSts", "Effect": "Deny", "Action": "sts:*", "Resource": "*"},
+  {"Sid": "DenyRoleChanges", "Effect": "Deny", "Action": ["iam:CreateRole", "iam:PutRolePolicy"], "Resource": "*"},
+  {"Sid": "DenyLeave", "Effect": "Deny", "Action": "organizations:LeaveOrganization", "Resource": "*"}
+]}

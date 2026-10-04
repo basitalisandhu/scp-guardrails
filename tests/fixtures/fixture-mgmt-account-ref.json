@@ -1,0 +1,4 @@
+{"Version": "2012-10-17", "Statement": [
+  {"Sid": "DenyIamUsersOutsideManagement", "Effect": "Deny", "Action": ["iam:CreateUser"], "Resource": "*",
+   "Condition": {"StringNotEquals": {"aws:PrincipalAccount": ["999988887777"]}}}
+]}

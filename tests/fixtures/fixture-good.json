@@ -1,0 +1,20 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyLeaveOrganization",
+      "Effect": "Deny",
+      "Action": "organizations:LeaveOrganization",
+      "Resource": "*"
+    },
+    {
+      "Sid": "ProtectCloudTrail",
+      "Effect": "Deny",
+      "Action": ["cloudtrail:DeleteTrail", "cloudtrail:StopLogging"],
+      "Resource": "*",
+      "Condition": {
+        "ArnNotLike": {"aws:PrincipalArn": ["arn:aws:iam::*:role/BreakGlassAdmin"]}
+      }
+    }
+  ]
+}

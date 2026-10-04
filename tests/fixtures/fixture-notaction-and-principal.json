@@ -1,0 +1,6 @@
+{"Version": "2012-10-17", "Statement": [
+  {"Sid": "AllowMostThings", "Effect": "Allow", "NotAction": "iam:*", "Resource": "*"},
+  {"Sid": "DenyEverythingElse", "Effect": "Deny", "NotAction": ["s3:GetObject"], "Resource": "*"},
+  {"Sid": "DenyForOneRole", "Effect": "Deny", "Action": "ec2:*", "Resource": "*", "Principal": {"AWS": "arn:aws:iam::123456789012:role/example"}},
+  {"Sid": "DenyForOneRole", "Effect": "Deny", "Action": "*", "Resource": "*"}
+]}

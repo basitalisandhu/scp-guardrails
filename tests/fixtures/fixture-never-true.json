@@ -1,0 +1,14 @@
+{"Version": "2012-10-17", "Statement": [
+  {"Sid": "EmptyValueList", "Effect": "Deny", "Action": "ec2:RunInstances", "Resource": "*",
+   "Condition": {"StringEquals": {"ec2:InstanceType": []}}},
+  {"Sid": "Contradiction", "Effect": "Deny", "Action": "s3:PutObject", "Resource": "*",
+   "Condition": {"StringEquals": {"aws:RequestedRegion": "eu-west-1"}, "StringNotEquals": {"aws:RequestedRegion": ["eu-west-1", "us-east-1"]}}},
+  {"Sid": "NullAndValue", "Effect": "Deny", "Action": "ec2:RunInstances", "Resource": "*",
+   "Condition": {"Null": {"aws:RequestTag/Owner": "true"}, "StringEquals": {"aws:RequestTag/Owner": "team-a"}}},
+  {"Sid": "ExemptEveryone", "Effect": "Deny", "Action": "guardduty:DeleteDetector", "Resource": "*",
+   "Condition": {"ArnNotLike": {"aws:PrincipalArn": "*"}}},
+  {"Sid": "ExemptEveryRole", "Effect": "Deny", "Action": "config:StopConfigurationRecorder", "Resource": "*",
+   "Condition": {"ArnNotLike": {"aws:PrincipalArn": "arn:aws:iam::*:role/*"}}},
+  {"Sid": "BoolTypo", "Effect": "Deny", "Action": "s3:GetObject", "Resource": "*",
+   "Condition": {"Bool": {"aws:SecureTransport": "no"}}}
+]}

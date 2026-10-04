@@ -1,0 +1,94 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "scp-guardrails"
+version = "0.1.0"
+description = "AWS service control policy builder and linter: builds AWS Organizations SCPs from a short spec, lints existing SCPs for lockouts and statements that do nothing, diffs and explains them, and runs as a GitHub Action."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Muhammad Basit Ali" }]
+keywords = [
+  "aws",
+  "aws-organizations",
+  "service-control-policy",
+  "scp",
+  "guardrails",
+  "iam",
+  "policy-as-code",
+  "linter",
+  "cloud-security",
+  "landing-zone",
+  "sarif",
+  "github-actions",
+  "cli",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Information Technology",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Security",
+  "Topic :: Software Development :: Quality Assurance",
+  "Topic :: System :: Systems Administration",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.5",
+]
+
+[project.scripts]
+scp-guardrails = "scp_guardrails.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/basitalisandhu/scp-guardrails"
+Repository = "https://github.com/basitalisandhu/scp-guardrails"
+Issues = "https://github.com/basitalisandhu/scp-guardrails/issues"
+Changelog = "https://github.com/basitalisandhu/scp-guardrails/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/basitalisandhu/scp-guardrails/blob/main/docs/rules.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/scp_guardrails"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "src/scp_guardrails/**",
+  "examples/**",
+  "docs/**",
+  "tests/**",
+  "action.yml",
+  "README.md",
+  "LICENSE",
+  "CHANGELOG.md",
+  "pyproject.toml",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["RUF012", "E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+"src/scp_guardrails/_miniyaml.py" = ["SIM", "B", "RUF", "UP", "E"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

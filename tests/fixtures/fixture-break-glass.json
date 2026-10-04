@@ -1,0 +1,6 @@
+{"Version": "2012-10-17", "Statement": [
+  {"Sid": "ProtectCloudTrail", "Effect": "Deny", "Action": ["cloudtrail:StopLogging", "cloudtrail:DeleteTrail"], "Resource": "*",
+   "Condition": {"ArnNotLike": {"aws:PrincipalArn": ["arn:aws:iam::*:role/SecurityAudit"]}}},
+  {"Sid": "ProtectGuardDuty", "Effect": "Deny", "Action": ["guardduty:DeleteDetector"], "Resource": "*",
+   "Condition": {"ArnNotLike": {"aws:PrincipalArn": ["arn:aws:iam::*:role/SecurityAudit", "arn:aws:iam::*:role/BreakGlass*"]}}}
+]}

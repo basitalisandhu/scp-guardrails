@@ -219,6 +219,24 @@ def test_break_glass_role_not_exempt():
     assert [f["sid"] for f in found] == ["ProtectCloudTrail"]  # ProtectGuardDuty covers it with BreakGlass*
 
 
+def test_break_glass_role_matching_is_case_sensitive(write):
+    st = {
+        "Sid": "CaseSensitiveBreakGlass",
+        "Effect": "Deny",
+        "Action": "cloudtrail:StopLogging",
+        "Resource": "*",
+        "Condition": {"ArnNotLike": {"aws:PrincipalArn": ["arn:aws:iam::*:role/BreakGlassAdmin"]}},
+    }
+
+    found = by_id(
+        write("case-sensitive-break-glass.json", {"Version": "2012-10-17", "Statement": [st]}),
+        "SCP-BREAK-GLASS-NOT-EXEMPT",
+        "--break-glass-role",
+        "breakglassadmin",
+    )
+    assert [f["sid"] for f in found] == ["CaseSensitiveBreakGlass"]
+
+
 def test_break_glass_literal_operator_does_not_count_as_wildcard_exemption():
     found = by_id(
         fixture("fixture-condition-operator.json"), "SCP-BREAK-GLASS-NOT-EXEMPT", "--break-glass-role", "AdminRole"

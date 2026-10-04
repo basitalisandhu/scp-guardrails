@@ -110,14 +110,17 @@ def split_operator(op: str) -> tuple[str, str, bool]:
     return qualifier, op, if_exists
 
 
-def _pattern(value: str) -> str:
+def _pattern(value: str, ignore_case: bool = True) -> str:
     # Policy variables such as ${aws:PrincipalAccount} can take any value, so treat them as a wildcard.
-    return re.sub(r"\$\{[^}]*\}", "*", value).lower()
+    pattern = re.sub(r"\$\{[^}]*\}", "*", value)
+    return pattern.lower() if ignore_case else pattern
 
 
-def wildcard_match(pattern: str, value: str) -> bool:
-    """IAM-style match: `*` any run of characters, `?` one character, case-insensitive."""
-    return fnmatch.fnmatchcase(value.lower(), _pattern(pattern).replace("[", "[[]"))
+def wildcard_match(pattern: str, value: str, ignore_case: bool = True) -> bool:
+    """IAM-style match: `*` any run of characters, `?` one character."""
+    if ignore_case:
+        value = value.lower()
+    return fnmatch.fnmatchcase(value, _pattern(pattern, ignore_case).replace("[", "[[]"))
 
 
 def action_covers(patterns: list[str], action: str) -> bool:

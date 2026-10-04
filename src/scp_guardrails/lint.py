@@ -314,18 +314,16 @@ def _is_full_allow(st: dict[str, Any]) -> bool:
     )
 
 
-def _principal_exemptions(st: dict[str, Any]) -> list[tuple[str, bool]]:
-    """(pattern, wildcards apply) for negated aws:PrincipalArn conditions: matching principals are exempt.
+def _principal_exemptions(st: dict[str, Any]) -> list[tuple[str, bool, bool]]:
+    """(pattern, wildcards apply, ignore case) for negated aws:PrincipalArn conditions."""
 
-    StringNotEquals and ArnNotEquals compare literally for String operators, so a `*` there exempts nobody; the
-    Like operators and ArnNotEquals (which AWS treats like ArnNotLike) honour wildcards.
-    """
-    out: list[tuple[str, bool]] = []
+    out: list[tuple[str, bool, bool]] = []
     for op, key, values in conditions(st):
         _, base, _ = split_operator(op)
         if key.lower() == "aws:principalarn" and base in NEGATED_OPS:
             wild = base in ("StringNotLike", "ArnNotLike", "ArnNotEquals")
-            out += [(v, wild) for v in values if isinstance(v, str)]
+            ignore_case = base == "StringNotEqualsIgnoreCase"
+            out += [(v, wild, ignore_case) for v in values if isinstance(v, str)]
     return out
 
 
@@ -333,11 +331,11 @@ def _role_arn(name: str) -> str:
     return f"arn:aws:iam::123456789012:role/{name}"
 
 
-def _exempts(patterns: list[tuple[str, bool]], arn: str) -> bool:
-    for pattern, wild in patterns:
-        if wild and wildcard_match(pattern, arn):
+def _exempts(patterns: list[tuple[str, bool, bool]], arn: str) -> bool:
+    for pattern, wild, ignore_case in patterns:
+        if wild and wildcard_match(pattern, arn, ignore_case=ignore_case):
             return True
-        if not wild and pattern.lower() == arn.lower():
+        if not wild and (pattern.lower() == arn.lower() if ignore_case else pattern == arn):
             return True
     return False
 
@@ -453,7 +451,7 @@ def _check_conditions(st: dict[str, Any], sid: str, opts: LintOptions) -> list[F
                 )
             )
     exemptions = _principal_exemptions(st)
-    if any(wild and p in ("*", "arn:aws:iam::*:*", "arn:*") for p, wild in exemptions):
+    if any(wild and p in ("*", "arn:aws:iam::*:*", "arn:*") for p, wild, _ in exemptions):
         out.append(
             _finding(
                 "SCP-CONDITION-NEVER-TRUE",

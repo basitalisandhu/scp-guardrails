@@ -128,6 +128,40 @@ def test_explain_describe_policy_output():
     assert rc == 0 and "DenyLeave: Denies organizations:LeaveOrganization" in out
 
 
+def test_explain_json_catalogue_and_custom_statements(write):
+    path = write(
+        "explanation.json",
+        {
+            "Statement": [
+                {"Sid": "DenyRootUser", "Effect": "Deny", "Action": "*", "Resource": "*"},
+                {"Sid": "CustomRead", "Effect": "Allow", "Action": "s3:GetObject", "Resource": "*"},
+            ]
+        },
+    )
+    rc, data = run_json(["explain", str(path), "--format", "json"])
+    assert rc == 0
+    assert data["policy"]
+    known, custom = data["statements"]
+    assert set(known) == {"sid", "effect", "sentence", "purpose", "side_effects"}
+    assert known["sid"] == "DenyRootUser"
+    assert known["purpose"] == catalog.BY_SID["DenyRootUser"].protects
+    assert known["side_effects"] == catalog.BY_SID["DenyRootUser"].side_effects
+    assert custom["effect"] == "Allow"
+    assert custom["purpose"] == custom["side_effects"] == ""
+    for format in ("text", "markdown"):
+        rc, text, _ = run(["explain", str(path), "--format", format])
+        assert rc == 0
+        for statement in data["statements"]:
+            assert statement["sentence"] in text
+
+
+def test_explain_json_rejects_non_policy(write):
+    rc, out, err = run(["explain", str(write("invalid.json", {})), "--format", "json"])
+    assert rc == 2
+    assert out == ""
+    assert "not an SCP document" in err
+
+
 def test_catalog_table_lists_every_key():
     rc, out, _ = run(["catalog"])
     assert rc == 0

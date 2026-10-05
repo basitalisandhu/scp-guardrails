@@ -131,13 +131,32 @@ def describe_statement(st: dict[str, Any]) -> str:
     return text + "."
 
 
+def explanation_data(doc: Any, name: str = "policy") -> dict[str, Any]:
+    """Structured statements shared by all explanation renderers."""
+    statements = []
+    if isinstance(doc, dict):
+        for idx, st in enumerate(s for s in as_list(doc.get("Statement")) if isinstance(s, dict)):
+            sid = sid_of(st, idx)
+            guardrail = BY_SID.get(sid)
+            statements.append(
+                {
+                    "sid": sid,
+                    "effect": st.get("Effect"),
+                    "sentence": describe_statement(st),
+                    "purpose": guardrail.protects if guardrail else "",
+                    "side_effects": guardrail.side_effects if guardrail else "",
+                }
+            )
+    return {"policy": name, "statements": statements}
+
+
 def explain_policy(doc: Any, name: str = "policy") -> list[str]:
     """Narrative lines for a whole document."""
     if not isinstance(doc, dict) or "Statement" not in doc:
         return [f"{name} is not an SCP document (no Statement element)."]
-    sts = [s for s in as_list(doc.get("Statement")) if isinstance(s, dict)]
-    denies = [s for s in sts if s.get("Effect") == "Deny"]
-    allows = [s for s in sts if s.get("Effect") == "Allow"]
+    sts = explanation_data(doc, name)["statements"]
+    denies = [s for s in sts if s["effect"] == "Deny"]
+    allows = [s for s in sts if s["effect"] == "Allow"]
     lines = [
         f"{name}: {len(sts)} statement(s), {len(denies)} deny and {len(allows)} allow, "
         f"{len(compact(doc))} characters in compact form.",
@@ -146,13 +165,11 @@ def explain_policy(doc: Any, name: str = "policy") -> list[str]:
         "service-linked roles, and it never grants anything.",
         "",
     ]
-    for idx, st in enumerate(sts):
-        sid = sid_of(st, idx)
-        lines.append(f"{sid}: {describe_statement(st)}")
-        guardrail = BY_SID.get(sid)
-        if guardrail:
-            lines.append(f"  Purpose: {guardrail.protects}")
-            lines.append(f"  Watch for: {guardrail.side_effects}")
+    for st in sts:
+        lines.append(f"{st['sid']}: {st['sentence']}")
+        if st["purpose"]:
+            lines.append(f"  Purpose: {st['purpose']}")
+            lines.append(f"  Watch for: {st['side_effects']}")
     if allows and not denies:
         lines += ["", "This policy only allows. Under a deny-list strategy it restricts nothing on its own."]
     return lines

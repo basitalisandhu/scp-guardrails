@@ -183,7 +183,7 @@ Details and examples: [docs/rules.md](docs/rules.md).
 | `build --spec FILE [--out DIR] [--format text\|json\|markdown] [--pretty] [--max-chars N]` | Build SCP documents, `manifest.json` and `SUMMARY.md`. | 0 built, 1 lint failure, 2 bad spec |
 | `lint PATH... [--format table\|json\|sarif] [--fail-on low\|medium\|high\|none] [--sarif FILE] [--limit N] [--strategy deny-list\|allow-list] [--break-glass-role NAME] [--admin-role NAME] [--management-account ID]` | Lint files, directories or globs. | 0, 1 findings at or above `--fail-on`, 2 bad input |
 | `diff A B [--format text\|json]` | Semantic diff by statement and action set. | 0 identical, 1 different, 2 bad input |
-| `explain POLICY [--format text\|markdown]` | Plain-English narrative. | 0, 2 bad input |
+| `explain POLICY [--format text\|markdown\|json]` | Plain-English narrative or structured explanation. | 0, 2 bad input |
 | `catalog [--format table\|json\|markdown] [--key KEY]` | The guardrail catalogue. | 0, 2 unknown key |
 
 Every command has `--help`. `python -m scp_guardrails` works too.

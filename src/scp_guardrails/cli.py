@@ -13,7 +13,7 @@ from pathlib import Path
 from . import __version__, catalog, report
 from .builder import SpecError, build, load_spec, summary_markdown, write_outputs
 from .diff import diff_policies, render_text
-from .explain import explain_policy, render_markdown
+from .explain import explain_policy, explanation_data, render_markdown
 from .lint import SEVERITIES, LintOptions, at_or_above, lint_policy, valid_account
 from .policy import SCP_MAX_CHARS, PolicyError, find_line, load_policy, looks_like_policy, parse_policy_text
 
@@ -127,7 +127,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=_Formatter,
     )
     p.add_argument("policy", type=Path, help="policy JSON file")
-    p.add_argument("--format", choices=["text", "markdown"], default="text", help="output format")
+    p.add_argument("--format", choices=["text", "markdown", "json"], default="text", help="output format")
 
     p = sub.add_parser(
         "catalog",
@@ -304,7 +304,9 @@ def cmd_explain(args: argparse.Namespace) -> int:
         _err(f"{args.policy}: not an SCP document (no Statement)")
         return EXIT_ERROR
     name = _display(args.policy)
-    if args.format == "markdown":
+    if args.format == "json":
+        print(json.dumps(explanation_data(doc, name), indent=2))
+    elif args.format == "markdown":
         print(render_markdown(doc, name), end="")
     else:
         print("\n".join(explain_policy(doc, name)))

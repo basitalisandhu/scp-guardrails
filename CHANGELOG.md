@@ -39,5 +39,6 @@ First release. The builder, the first twelve lint checks, the guardrail catalogu
 - Default size limit and attachment count follow the AWS Organizations quotas page as checked on 2026-10-04 (10,240 characters, 10 SCPs per target); the skill used 5,120 and 5. Both are configurable.
 - Severities are high, medium and low instead of error, warning and info. Allow with NotAction is medium, since SCPs now accept the element.
 
-[Unreleased]: https://github.com/basitalisandhu/scp-guardrails/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/basitalisandhu/scp-guardrails/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/basitalisandhu/scp-guardrails/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/basitalisandhu/scp-guardrails/releases/tag/v0.1.0

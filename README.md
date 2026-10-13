@@ -46,8 +46,8 @@ uvx --from git+https://github.com/basitalisandhu/scp-guardrails scp-guardrails -
 Container image: each release tag publishes `ghcr.io/basitalisandhu/scp-guardrails` for linux/amd64 and linux/arm64. It runs as uid 1000 in `/work`:
 
 ```bash
-docker run --rm -v "$PWD:/work" ghcr.io/basitalisandhu/scp-guardrails:0.1.0 build --spec spec.yaml --out scps
-docker run --rm -v "$PWD:/work:ro" ghcr.io/basitalisandhu/scp-guardrails:0.1.0 lint policies/
+docker run --rm -v "$PWD:/work" ghcr.io/basitalisandhu/scp-guardrails:0.2.0 build --spec spec.yaml --out scps
+docker run --rm -v "$PWD:/work:ro" ghcr.io/basitalisandhu/scp-guardrails:0.2.0 lint policies/
 ```
 
 ## GitHub Action
@@ -69,7 +69,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: basitalisandhu/scp-guardrails@v0.1.0   # pin to the release commit SHA in production
+      - uses: basitalisandhu/scp-guardrails@v0.2.0   # pin to the release commit SHA in production
         with:
           path: policies/**/*.json
           fail-on: medium

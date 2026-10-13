@@ -54,7 +54,7 @@ def test_readme_shape():
 
 def test_changelog_has_this_version_dated():
     text = (ROOT / "CHANGELOG.md").read_text()
-    assert f"## [{__version__}] - 2026-10-04" in text
+    assert re.search(rf"^## \[{re.escape(__version__)}\] - \d{{4}}-\d{{2}}-\d{{2}}$", text, re.M)
     assert "aws-security-skills" in text
 
 

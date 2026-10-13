@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-13
+
+### Added
+
+- `scp-guardrails explain --format json`: the same statement explanations as the text and Markdown formats (Sid, effect, one-sentence description, purpose and side effects) as structured JSON. Contributed by nawaaaaaAaar in #8.
+
+### Fixed
+
+- `lint`: `aws:PrincipalArn` exemptions now respect case sensitivity. Only the `IgnoreCase` operators compare without regard to case, so a role exemption that differs from the role name by case is no longer treated as exempt. Contributed by Tushar Prajapati in #7.
+
+### Changed
+
+- Dependency updates for the GitHub Actions used in CI and in the action self-test (#9, #10, #11).
+
 ## [0.1.0] - 2026-10-04
 
 First release. The builder, the first twelve lint checks, the guardrail catalogue and the spend denies are extracted from the `scp-guardrails`, `aws-spend-guardrails` and `sandbox-account-guardrail-pack` skills in [aws-security-skills](https://github.com/basitalisandhu/aws-security-skills), which keep their own copies.
@@ -25,5 +39,6 @@ First release. The builder, the first twelve lint checks, the guardrail catalogu
 - Default size limit and attachment count follow the AWS Organizations quotas page as checked on 2026-10-04 (10,240 characters, 10 SCPs per target); the skill used 5,120 and 5. Both are configurable.
 - Severities are high, medium and low instead of error, warning and info. Allow with NotAction is medium, since SCPs now accept the element.
 
-[Unreleased]: https://github.com/basitalisandhu/scp-guardrails/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/basitalisandhu/scp-guardrails/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/basitalisandhu/scp-guardrails/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/basitalisandhu/scp-guardrails/releases/tag/v0.1.0

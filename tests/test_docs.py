@@ -68,11 +68,29 @@ def test_pyproject_version_matches_package():
     assert f'version = "{__version__}"' in text
 
 
+TEXT_SUFFIXES = {".md", ".py", ".yml", ".yaml", ".json", ".toml", ".svg"}
+# Local virtual environments, caches and build output are not the project's files: `make install` and the
+# CONTRIBUTING set-up create .venv inside the checkout, and third-party packages there may contain any character.
+SKIP_DIRS = {"venv", "env", "node_modules", "build", "dist", "scps"}
+
+
+def project_text_files(root):
+    for path in root.rglob("*"):
+        rel = path.relative_to(root).parts
+        if any((p.startswith(".") and p != ".github") or p in SKIP_DIRS for p in rel[:-1]):
+            continue
+        if path.is_file() and path.suffix in TEXT_SUFFIXES:
+            yield path
+
+
+def test_project_text_files_skips_virtual_environments(tmp_path):
+    for rel in (".venv/lib/x.py", "venv/y.md", ".git/z.json", "node_modules/a.json", "src/keep.py", ".github/k.yml"):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text("x")
+    found = sorted(p.relative_to(tmp_path).as_posix() for p in project_text_files(tmp_path))
+    assert found == [".github/k.yml", "src/keep.py"]
+
+
 def test_no_em_dashes_in_text_files():
-    for path in ROOT.rglob("*"):
-        if (
-            path.is_file()
-            and path.suffix in {".md", ".py", ".yml", ".yaml", ".json", ".toml", ".svg"}
-            and ".git" not in path.parts
-        ):
-            assert chr(0x2014) not in path.read_text(encoding="utf-8"), path
+    for path in project_text_files(ROOT):
+        assert chr(0x2014) not in path.read_text(encoding="utf-8"), path

@@ -111,9 +111,17 @@ def validate_spec(spec: dict[str, Any]) -> None:
     _need(not unknown, f"unknown spec keys: {', '.join(sorted(unknown))} (see `scp-guardrails catalog`)")
     for key in BOOL_KEYS & set(spec):
         _need(isinstance(spec[key], bool), f"{key} must be true or false")
-    for key in LIST_KEYS & set(spec):
+    for key in sorted(LIST_KEYS & set(spec)):
+        value = spec[key]
+        if isinstance(value, str):
+            raise SpecError(f"{key} must be a list of non-empty strings; write [{value}] for a single entry")
+        if isinstance(value, list) and any(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value):
+            raise SpecError(
+                f"{key} must be a list of non-empty strings; put numbers such as account ids in quotes "
+                '("012345678901"), because unquoted digits are read as a number and lose leading zeros'
+            )
         _need(
-            isinstance(spec[key], list) and all(isinstance(v, str) and v for v in spec[key]),
+            isinstance(value, list) and all(isinstance(v, str) and v for v in value),
             f"{key} must be a list of non-empty strings",
         )
     for key in LIST_OR_DEFAULT_KEYS & set(spec):

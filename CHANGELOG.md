@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Spec reader: folded block scalars (`>`) now turn an empty line into one line break instead of two, and a block scalar at the very end of a file without a final line break no longer gains one.
+- Spec reader: a `key: value` line indented under a plain value (`protected_roles: Admin` followed by an indented `deny_root_user: true`) is now a parse error with the line number. Before, it was silently read as part of the value.
+- Spec reader: content after a top-level scalar without a `---` separator is now a parse error. Before, it was dropped.
+- Spec reader: numbers with leading zeros (`012`) are integers, as YAML 1.2 says, not floats.
+- `build`: an account id written without quotes, or a single string where a list is expected, now gets an error that says how to write it.
+- Tests: the em-dash check no longer reads files inside a local `.venv`, so `make install` followed by `make check` passes on a fresh clone.
+
 ## [0.2.0] - 2026-10-13
 
 ### Added

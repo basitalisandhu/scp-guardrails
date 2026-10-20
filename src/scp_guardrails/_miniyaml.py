@@ -27,7 +27,7 @@ class YAMLError(ValueError):
 
 
 _KEY_RE = re.compile(r"""^(?P<key>"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[^\s"'#\[\{][^:]*?|-)\s*:(?=\s|$)""")
-_INT_RE = re.compile(r"^[-+]?(?:0|[1-9][0-9_]*)$")
+_INT_RE = re.compile(r"^[-+]?[0-9][0-9_]*$")
 _HEX_RE = re.compile(r"^0x[0-9a-fA-F_]+$")
 _OCT_RE = re.compile(r"^0o[0-7_]+$")
 _FLOAT_RE = re.compile(r"^[-+]?(?:\.[0-9]+|[0-9][0-9_]*(?:\.[0-9_]*)?)(?:[eE][-+]?[0-9]+)?$")
@@ -143,7 +143,11 @@ def _scalar(token: str):
 
 class _Parser:
     def __init__(self, text: str):
-        self.lines = [_Line(n, raw.rstrip("\r")) for n, raw in enumerate(text.split("\n"), 1)]
+        raws = text.split("\n")
+        self.final_break = text.endswith("\n")
+        if len(raws) > 1 and raws[-1] == "":
+            raws.pop()  # the final line break ends the last line; it does not start an empty one
+        self.lines = [_Line(n, raw.rstrip("\r")) for n, raw in enumerate(raws, 1)]
         self.anchors: dict[str, object] = {}
 
     # ---- helpers --------------------------------------------------------------------------------------------
@@ -184,6 +188,7 @@ class _Parser:
         i = 0
         n = len(self.lines)
         saw_marker = False
+        need_marker = False
         while i < n:
             i = self._next_content(i)
             if i >= n:
@@ -194,6 +199,7 @@ class _Parser:
                 continue
             if line.indent == 0 and (line.text == "---" or line.text.startswith("--- ")):
                 saw_marker = True
+                need_marker = False
                 rest = line.text[3:].strip()
                 i += 1
                 if rest:
@@ -204,10 +210,14 @@ class _Parser:
                     docs.append(None)
                 continue
             if line.indent == 0 and line.text == "...":
+                need_marker = False
                 i += 1
                 continue
+            if need_marker:
+                raise YAMLError(f"line {line.no}: content after the end of the document (missing '---'?)")
             value, i = self._parse_node(i, line.indent)
             docs.append(value)
+            need_marker = True
         if not docs and not saw_marker:
             return []
         return docs
@@ -385,7 +395,11 @@ class _Parser:
                 break
             if nxt.indent <= line.indent and (nxt.text.startswith("- ") or nxt.text == "-" or _KEY_RE.match(nxt.text)):
                 break
-            if nxt.indent > line.indent or not (_KEY_RE.match(nxt.text) or nxt.text.startswith("- ")):
+            if _KEY_RE.match(nxt.text):
+                raise YAMLError(
+                    f"line {nxt.no}: unexpected indentation: a 'key: value' line cannot continue a plain scalar"
+                )
+            if nxt.indent > line.indent or not nxt.text.startswith("- "):
                 parts.append(nxt.text.strip())
                 j += 1
                 continue
@@ -424,23 +438,25 @@ class _Parser:
             body.pop()
             trailing += 1
         if style == ">":
-            out_lines: list[str] = []
-            para: list[str] = []
+            # Folding: a single line break between two normal lines becomes a space; each empty line in between
+            # stays as one line break; breaks around more-indented lines are kept.
+            text = ""
+            prev = None
+            blanks = 0
             for b in body:
                 if b == "":
-                    out_lines.append(" ".join(para))
-                    out_lines.append("")
-                    para = []
-                elif b.startswith(" "):
-                    if para:
-                        out_lines.append(" ".join(para))
-                        para = []
-                    out_lines.append(b)
+                    blanks += 1
+                    continue
+                kind = "more" if b.startswith((" ", "\t")) else "normal"
+                if prev is None:
+                    text += "\n" * blanks
+                elif prev == "normal" and kind == "normal":
+                    text += "\n" * blanks if blanks else " "
                 else:
-                    para.append(b)
-            if para:
-                out_lines.append(" ".join(para))
-            text = "\n".join(out_lines)
+                    text += "\n" * (blanks + 1)
+                text += b
+                prev = kind
+                blanks = 0
         else:
             text = "\n".join(body)
         if chomp == "-":
@@ -449,6 +465,8 @@ class _Parser:
             text = text + "\n" * (1 + trailing)
         else:
             text = text.rstrip("\n") + "\n" if text else ""
+        if j >= n and not trailing and not self.final_break and text.endswith("\n"):
+            text = text[:-1]  # the stream ends without a line break, so the last line has none either
         return text, j
 
     def _parse_inline_value(self, rest: str, no: int):

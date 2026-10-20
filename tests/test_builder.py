@@ -276,3 +276,18 @@ def test_example_specs_build_cleanly():
     for name in ("spec.yaml", "sandbox-spec.yaml"):
         result = builder.build(builder.load_spec(ROOT / "examples" / name))
         assert result.findings == [], name
+
+
+def test_unquoted_account_id_gets_a_quoting_hint(write):
+    rc, _, err = run(["build", "--spec", str(write("acct.yaml", "deny_iam_users_outside:\n  - 012345678901\n"))])
+    assert rc == 2 and "in quotes" in err and "leading zeros" in err
+
+
+def test_single_string_instead_of_a_list_gets_a_hint(write):
+    rc, _, err = run(["build", "--spec", str(write("region.yaml", "allowed_regions: eu-west-1\n"))])
+    assert rc == 2 and "write [eu-west-1]" in err
+
+
+def test_mis_indented_spec_is_a_parse_error(write):
+    rc, _, err = run(["build", "--spec", str(write("indent.yaml", "deny_root_user: true\n  require_imdsv2: true\n"))])
+    assert rc == 2 and "cannot parse" in err and "line 2" in err

@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-20
+
 ### Added
 
 - Spec key `attach_levels` (for example `[root, ou]`): when the guardrails need more documents than one target can take, `build` fills each level with up to `max_documents` documents in order, adds `attach_level` to each document in `manifest.json`, prints the level in the text output and writes an "Attachment plan" table in `SUMMARY.md`. Without the key the output is unchanged (#5).
@@ -19,6 +21,10 @@ All notable changes to this project are documented here. The format follows
 - Spec reader: numbers with leading zeros (`012`) are integers, as YAML 1.2 says, not floats.
 - `build`: an account id written without quotes, or a single string where a list is expected, now gets an error that says how to write it.
 - Tests: the em-dash check no longer reads files inside a local `.venv`, so `make install` followed by `make check` passes on a fresh clone.
+
+### Changed
+
+- Workflows and repository policy hardened for the OpenSSF Scorecard (#13), and a dependency update for the SARIF upload action (#14).
 
 ## [0.2.0] - 2026-10-13
 
@@ -53,6 +59,7 @@ First release. The builder, the first twelve lint checks, the guardrail catalogu
 - Default size limit and attachment count follow the AWS Organizations quotas page as checked on 2026-10-04 (10,240 characters, 10 SCPs per target); the skill used 5,120 and 5. Both are configurable.
 - Severities are high, medium and low instead of error, warning and info. Allow with NotAction is medium, since SCPs now accept the element.
 
-[Unreleased]: https://github.com/basitalisandhu/scp-guardrails/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/basitalisandhu/scp-guardrails/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/basitalisandhu/scp-guardrails/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/basitalisandhu/scp-guardrails/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/basitalisandhu/scp-guardrails/releases/tag/v0.1.0

@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Spec key `attach_levels` (for example `[root, ou]`): when the guardrails need more documents than one target can take, `build` fills each level with up to `max_documents` documents in order, adds `attach_level` to each document in `manifest.json`, prints the level in the text output and writes an "Attachment plan" table in `SUMMARY.md`. Without the key the output is unchanged (#5).
+- README: the quick start fetches the example spec, so it works after `pipx install` without a clone, and shows the real output.
+
 ### Fixed
 
 - Spec reader: folded block scalars (`>`) now turn an empty line into one line break instead of two, and a block scalar at the very end of a file without a final line break no longer gains one.

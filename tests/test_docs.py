@@ -58,9 +58,13 @@ def test_changelog_has_this_version_dated():
     assert "aws-security-skills" in text
 
 
-def test_good_first_issues_has_six_tasks():
+def test_good_first_issues_link_each_open_task_to_its_issue():
     text = (ROOT / "docs" / "good-first-issues.md").read_text()
-    assert len(re.findall(r"^## \d\. ", text, re.M)) == 6
+    tasks = re.findall(r"^## \d\. .*$", text, re.M)
+    assert tasks
+    assert all(
+        re.search(r"\(\[#\d+\]\(https://github.com/basitalisandhu/scp-guardrails/issues/\d+\)\)$", t) for t in tasks
+    )
 
 
 def test_pyproject_version_matches_package():

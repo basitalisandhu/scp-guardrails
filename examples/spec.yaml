@@ -13,3 +13,5 @@ deny_iam_users_outside:
   - "111122223333"
 require_imdsv2: true
 deny_public_s3_acls: true
+# When the guardrails need more documents than one root or OU can take, spread them:
+# attach_levels: [root, ou]

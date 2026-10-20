@@ -490,7 +490,8 @@ def render_markdown() -> str:
     out += [
         f"- AWS Organizations quotas ({DOCS_QUOTAS}): the quotas page lists a maximum SCP document size and a "
         "maximum number of SCPs attached directly to a root, OU or account. `build` packs statements into as few "
-        "documents as fit under `max_policy_chars` and fails when they need more than `max_documents`.",
+        "documents as fit under `max_policy_chars` and fails when they need more than `max_documents`, or more "
+        "than `max_documents` per level when `attach_levels` spreads them over the root and OUs.",
         "- All characters count against the size limit; `build` measures the compact JSON form, which is what you "
         "should upload.",
         "- Inheritance: an account is subject to every SCP attached to the root, to each OU above it and to itself, "

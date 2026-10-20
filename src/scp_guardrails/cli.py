@@ -195,8 +195,9 @@ def cmd_build(args: argparse.Namespace) -> int:
     else:
         m = result.manifest
         for meta in m["documents"]:
+            level = f", attach at {meta['attach_level']}" if "attach_level" in meta else ""
             print(
-                f"{meta['file']}: {meta['chars_compact']}/{m['limit']} chars, guardrails: "
+                f"{meta['file']}: {meta['chars_compact']}/{m['limit']} chars{level}, guardrails: "
                 f"{', '.join(meta['guardrails'])}"
             )
             print(f"  statements: {', '.join(meta['statements'])}")

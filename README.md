@@ -7,10 +7,24 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
 
+For cloud and platform engineers who run multi-account AWS organizations, and for whoever reviews SCP changes. Quick start (Python 3.11 or newer; the second line fetches the example spec):
+
 ```bash
 pipx install git+https://github.com/basitalisandhu/scp-guardrails
-scp-guardrails build --spec examples/spec.yaml --out scps
-scp-guardrails lint scps/
+curl -fsSLO https://raw.githubusercontent.com/basitalisandhu/scp-guardrails/main/examples/spec.yaml
+scp-guardrails build --spec spec.yaml --out scps && scp-guardrails lint scps/
+```
+
+Output of those commands, as run on 2026-10-20:
+
+```text
+scp-01.json: 4138/10240 chars, guardrails: allowed_regions, deny_disable_security_services, deny_iam_users_outside, deny_leave_organization, deny_public_s3_acls, deny_root_user, require_imdsv2
+  statements: DenyLeaveOrganization, DenyRootUser, ProtectCloudTrail, ProtectGuardDuty, ProtectSecurityHub, ProtectConfig, DenyOutsideAllowedRegions, DenyIamUsersOutsideIdentityAccount, RequireImdsv2OnLaunch, DenyImdsOptionChanges, DenyImdsv1RoleCredentials, DenyPublicS3CannedAcls, ProtectAccountPublicAccessBlock
+wrote 1 document(s), manifest.json and SUMMARY.md to scps
+Review every document and test it on a non-production OU before attaching it.
+skipped scps/manifest.json: not an SCP document (no Statement)
+scps/scp-01.json: 4138/10240 chars, 0 finding(s)
+1 file(s), 0 finding(s): 0 high, 0 medium, 0 low.
 ```
 
 ## Demo
@@ -106,7 +120,7 @@ Outputs: `finding-count`, `highest-severity`, `gate` (`pass` or `fail`), `file-c
    deny_public_s3_acls: true
    ```
 
-2. Build: `scp-guardrails build --spec spec.yaml --out scps`. You get `scps/scp-01.json` (and more if the statements do not fit in one), `manifest.json` and `SUMMARY.md`. Exit 1 means a generated document failed lint and nothing was written; exit 2 means the spec is wrong.
+2. Build: `scp-guardrails build --spec spec.yaml --out scps`. You get `scps/scp-01.json` (and more if the statements do not fit in one), `manifest.json` and `SUMMARY.md`. If the build needs more documents than one root or OU can take, add `attach_levels: [root, ou]` and follow the attachment plan in `SUMMARY.md`. Exit 1 means a generated document failed lint and nothing was written; exit 2 means the spec is wrong.
 3. Read `SUMMARY.md` with whoever owns the accounts. Every statement lists its side effects.
 4. Lint what you already have: `scp-guardrails lint existing/ --fail-on medium`. Add `--break-glass-role BreakGlassAdmin` to check every exemption covers it, and `--management-account <id>` to catch conditions about the management account.
 5. Before you replace a live SCP: `scp-guardrails diff live.json scps/scp-01.json`.
@@ -147,7 +161,9 @@ Every guardrail is a Deny; none grants anything. Full detail, side effects and A
 | `deny_commitments` | DenyPurchaseCommitments | reserved capacity, Savings Plans and Marketplace subscriptions |
 | `protect_budgets` | ProtectBudgetsAndAnomalyMonitors | changing budgets, budget actions and cost anomaly monitors |
 
-Options: `protected_roles` (role names exempt from every guardrail that takes an exemption, as `ArnNotLike` on `aws:PrincipalArn`), `max_policy_chars` (default 10240) and `max_documents` (default 9: ten directly attached SCPs per target, one of them FullAWSAccess).
+Options: `protected_roles` (role names exempt from every guardrail that takes an exemption, as `ArnNotLike` on `aws:PrincipalArn`), `max_policy_chars` (default 10240), `max_documents` (default 9: ten directly attached SCPs per target, one of them FullAWSAccess) and `attach_levels`.
+
+`attach_levels` (for example `[root, ou]`) is for specs that need more documents than one target can take. The build fills the first level with up to `max_documents` documents, then the next, adds `attach_level` to each document in `manifest.json` and writes an "Attachment plan" table in `SUMMARY.md`. SCPs at the root and at an OU both apply to the accounts under the OU, so those accounts get every guardrail. Without the key the build stops at `max_documents`, as before.
 
 ## Lint rules
 
@@ -221,7 +237,7 @@ The builder, the original twelve lint checks and the catalogue come from the `sc
 
 ## Contributing
 
-Issues and pull requests are welcome, in particular SCPs that lint wrongly (a false positive or a missed lockout) with a minimal policy that shows it, and guardrails worth adding to the catalogue with the AWS documentation behind them. Run `make check` (ruff and pytest) before opening a pull request and read [CONTRIBUTING.md](CONTRIBUTING.md). [docs/good-first-issues.md](docs/good-first-issues.md) lists six scoped starting points. Security problems: see [SECURITY.md](SECURITY.md).
+Issues and pull requests are welcome, in particular SCPs that lint wrongly (a false positive or a missed lockout) with a minimal policy that shows it, and guardrails worth adding to the catalogue with the AWS documentation behind them. Run `make check` (ruff and pytest) before opening a pull request and read [CONTRIBUTING.md](CONTRIBUTING.md). [docs/good-first-issues.md](docs/good-first-issues.md) lists the open starting points, each linked to its issue. Security problems: see [SECURITY.md](SECURITY.md).
 
 ## Related projects
 

@@ -32,7 +32,7 @@ from .policy import POLICY_VERSION, SCP_MAX_ATTACHED, SCP_MAX_CHARS, compact
 Statement = dict[str, Any]
 
 GUARDRAIL_KEYS = set(BY_KEY)
-OPTION_KEYS = {"protected_roles", "max_policy_chars", "max_documents"}
+OPTION_KEYS = {"protected_roles", "max_policy_chars", "max_documents", "attach_levels"}
 KNOWN_KEYS = GUARDRAIL_KEYS | OPTION_KEYS
 BOOL_KEYS = {
     "deny_leave_organization",
@@ -62,6 +62,7 @@ ACCOUNT_RE = re.compile(r"^\d{12}$")
 ROLE_RE = re.compile(r"^[\w+=,.@*-]{1,64}$")
 TYPE_PATTERN_RE = re.compile(r"^[a-z0-9.*-]{1,40}$")
 SERVICE_RE = re.compile(r"^[a-z0-9-]{2,40}$")
+LEVEL_RE = re.compile(r"^[A-Za-z0-9][\w.:-]{0,63}$")
 TAG_RE = re.compile(r"^[\w.:/=+@ -]{1,128}$")
 INSTANCE_ARN = "arn:aws:ec2:*:*:instance/*"
 VOLUME_ARN = "arn:aws:ec2:*:*:volume/*"
@@ -184,6 +185,18 @@ def validate_spec(spec: dict[str, Any]) -> None:
     if "max_documents" in spec:
         v = spec["max_documents"]
         _need(_is_int(v) and 1 <= v <= 50, "max_documents must be a whole number from 1 to 50")
+    if "attach_levels" in spec:
+        levels = spec["attach_levels"]
+        _need(
+            isinstance(levels, list) and bool(levels) and all(isinstance(v, str) for v in levels),
+            "attach_levels must be a non-empty list of level names such as [root, ou]",
+        )
+        for level in levels:
+            _need(
+                bool(LEVEL_RE.match(level)),
+                f"attach_levels: {level!r} is not a level name (letters, digits, '.', ':', '_' or '-'; up to 64)",
+            )
+        _need(len(set(levels)) == len(levels), "attach_levels: each level may appear only once")
 
 
 def exemption(spec: dict[str, Any]) -> dict[str, Any]:
@@ -473,12 +486,20 @@ def build(spec: dict[str, Any]) -> BuildResult:
     if not statements:
         raise SpecError("the spec enables no guardrail (see `scp-guardrails catalog` for the keys)")
     packed = pack(statements, limit)
-    if len(packed) > max_docs:
+    levels: list[str] = list(spec.get("attach_levels") or [])
+    if levels:
+        if len(packed) > max_docs * len(levels):
+            raise SpecError(
+                f"the guardrails need {len(packed)} documents of at most {limit} characters, more than "
+                f"{len(levels)} attach level(s) x max_documents ({max_docs}) = {max_docs * len(levels)}. Add a "
+                "level to attach_levels, raise max_policy_chars, or turn off a guardrail."
+            )
+    elif len(packed) > max_docs:
         raise SpecError(
             f"the guardrails need {len(packed)} documents of at most {limit} characters, more than max_documents "
             f"({max_docs}). Each root, OU and account takes at most {SCP_MAX_ATTACHED} directly attached SCPs "
-            "including FullAWSAccess; attach some documents at the root and some at an OU (inheritance applies "
-            "both), raise max_policy_chars, or raise max_documents if you will split them that way."
+            "including FullAWSAccess; set attach_levels (for example [root, ou]) to spread the documents over "
+            "the root and an OU (inheritance applies both), or raise max_policy_chars."
         )
     documents = [document([s for _, s in doc]) for doc in packed]
     manifest: dict[str, Any] = {
@@ -488,22 +509,34 @@ def build(spec: dict[str, Any]) -> BuildResult:
         "warnings": [],
         "lint": [],
     }
+    if levels:
+        manifest["attach_levels"] = levels
     findings: list[Finding] = []
     for i, (doc, items) in enumerate(zip(documents, packed, strict=True), 1):
         name = f"scp-{i:02d}.json"
-        manifest["documents"].append(
-            {
-                "file": name,
-                "chars_compact": len(compact(doc)),
-                "guardrails": sorted({g for g, _ in items}),
-                "statements": [s.get("Sid") for _, s in items],
-            }
-        )
+        meta: dict[str, Any] = {
+            "file": name,
+            "chars_compact": len(compact(doc)),
+            "guardrails": sorted({g for g, _ in items}),
+            "statements": [s.get("Sid") for _, s in items],
+        }
+        if levels:
+            # Fill the first level up to max_documents, then the next: documents keep their build order.
+            meta["attach_level"] = levels[(i - 1) // max_docs]
+        manifest["documents"].append(meta)
         for f in lint_policy(doc, LintOptions(limit=limit)):
             f.file = name
             findings.append(f)
             manifest["lint"].append(f.as_dict())
-    if len(documents) > SCP_MAX_ATTACHED - 1:
+    if levels:
+        for level in levels:
+            used = sum(1 for d in manifest["documents"] if d["attach_level"] == level)
+            if used > SCP_MAX_ATTACHED - 1:
+                manifest["warnings"].append(
+                    f"{used} documents at {level}: a root, OU or account takes at most {SCP_MAX_ATTACHED} directly "
+                    "attached SCPs including FullAWSAccess"
+                )
+    elif len(documents) > SCP_MAX_ATTACHED - 1:
         manifest["warnings"].append(
             f"{len(documents)} documents: a root, OU or account takes at most {SCP_MAX_ATTACHED} directly attached "
             "SCPs including FullAWSAccess, so split them across the root and OUs"
@@ -542,6 +575,21 @@ def summary_markdown(result: BuildResult) -> str:
             g = BY_SID.get(str(st.get("Sid"))) or BY_KEY.get(key)
             side = g.side_effects if g else ""
             out.append(f"| `{st.get('Sid')}` | `{key}` | {describe_statement(st)} | {side} |")
+        out.append("")
+    if m.get("attach_levels"):
+        out += [
+            "## Attachment plan",
+            "",
+            "Attach each document at the level named here. SCPs at the root and at an OU both apply to the accounts "
+            "below them, so every guardrail still applies to every account under the last level. Accounts directly "
+            "under an earlier level do not get the documents of the later levels.",
+            "",
+            "| Level | Documents |",
+            "| --- | --- |",
+        ]
+        for level in m["attach_levels"]:
+            files = [d["file"] for d in m["documents"] if d["attach_level"] == level]
+            out.append(f"| `{level}` | {', '.join(f'`{f}`' for f in files) if files else 'none'} |")
         out.append("")
     if m["warnings"]:
         out += ["## Warnings", ""] + [f"- {w}" for w in m["warnings"]] + [""]

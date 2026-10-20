@@ -291,3 +291,67 @@ def test_single_string_instead_of_a_list_gets_a_hint(write):
 def test_mis_indented_spec_is_a_parse_error(write):
     rc, _, err = run(["build", "--spec", str(write("indent.yaml", "deny_root_user: true\n  require_imdsv2: true\n"))])
     assert rc == 2 and "cannot parse" in err and "line 2" in err
+
+
+def test_attach_levels_spread_documents_over_two_levels(tmp_path):
+    spec = {**builder.load_spec(SPEC), "max_policy_chars": 1100, "max_documents": 3, "attach_levels": ["root", "ou"]}
+    result = builder.build(spec)
+    assert len(result.documents) == 5
+    levels = [d["attach_level"] for d in result.manifest["documents"]]
+    assert levels == ["root", "root", "root", "ou", "ou"]
+    assert result.manifest["attach_levels"] == ["root", "ou"]
+    builder.write_outputs(result, tmp_path)
+    summary = (tmp_path / "SUMMARY.md").read_text()
+    assert "## Attachment plan" in summary
+    assert "| `root` | `scp-01.json`, `scp-02.json`, `scp-03.json` |" in summary
+    assert "| `ou` | `scp-04.json`, `scp-05.json` |" in summary
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    assert manifest["documents"][3]["attach_level"] == "ou"
+
+
+def test_attach_levels_that_fit_in_one_level_use_only_the_first():
+    spec = {**builder.load_spec(SPEC), "attach_levels": ["root", "ou"]}
+    result = builder.build(spec)
+    assert len(result.documents) == 1
+    assert result.manifest["documents"][0]["attach_level"] == "root"
+    assert "| `ou` | none |" in builder.summary_markdown(result)
+
+
+def test_without_attach_levels_the_output_is_unchanged():
+    result = builder.build(builder.load_spec(SPEC))
+    assert "attach_levels" not in result.manifest
+    assert all("attach_level" not in d for d in result.manifest["documents"])
+    assert "Attachment plan" not in builder.summary_markdown(result)
+
+
+def test_attach_levels_capacity_is_levels_times_max_documents():
+    spec = {**builder.load_spec(SPEC), "max_policy_chars": 1100, "max_documents": 2, "attach_levels": ["root", "ou"]}
+    with pytest.raises(builder.SpecError, match=r"2 attach level\(s\) x max_documents \(2\) = 4"):
+        builder.build(spec)
+
+
+def test_too_many_documents_error_suggests_attach_levels():
+    spec = {**builder.load_spec(SPEC), "max_policy_chars": 1100, "max_documents": 4}
+    with pytest.raises(builder.SpecError, match="set attach_levels"):
+        builder.build(spec)
+
+
+@pytest.mark.parametrize(
+    ("levels", "message"),
+    [
+        ([], "non-empty list"),
+        ("root", "non-empty list"),
+        (["root", "root"], "only once"),
+        (["root", "has space"], "not a level name"),
+        ([1], "non-empty list"),
+    ],
+)
+def test_attach_levels_validation(levels, message):
+    with pytest.raises(builder.SpecError, match=message):
+        builder.validate_spec({"deny_root_user": True, "attach_levels": levels})
+
+
+def test_text_output_names_the_level(write):
+    spec = write("lv.json", {"deny_root_user": True, "attach_levels": ["ou-workloads"]})
+    rc, out, _ = run(["build", "--spec", str(spec)])
+    assert rc == 0 and "attach at ou-workloads" in out

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "scp-guardrails"
-version = "0.2.0"
+version = "0.3.0"
 description = "AWS service control policy builder and linter: builds AWS Organizations SCPs from a short spec, lints existing SCPs for lockouts and statements that do nothing, diffs and explains them, and runs as a GitHub Action."
 readme = "README.md"
 requires-python = ">=3.11"

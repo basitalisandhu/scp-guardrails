@@ -35,4 +35,4 @@ Starting points for new contributors. The open ones are filed under the [`good f
 
 - `explain --format json` shipped in 0.2.0 (#8).
 - Case-sensitive matching for `aws:PrincipalArn` exemptions shipped in 0.2.0 (#7).
-- The attachment plan (`attach_levels`) was added for the next release (#5).
+- The attachment plan (`attach_levels`) shipped in 0.3.0 (#5).

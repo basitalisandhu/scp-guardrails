@@ -8,6 +8,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from . import _jsondepth
+
 POLICY_VERSION = "2012-10-17"
 
 # AWS Organizations quotas for service control policies, as published on the quotas page (checked 2026-10-04):
@@ -50,7 +52,7 @@ def as_list(value: Any) -> list[Any]:
 def parse_policy_text(text: str, name: str = "<policy>") -> Any:
     """Parse an SCP document, or the output of `aws organizations describe-policy` (its Content string)."""
     try:
-        data = json.loads(text)
+        data = _jsondepth.loads(text)
     except ValueError as exc:  # JSONDecodeError, or an integer longer than Python reads
         raise PolicyError(f"{name}: invalid JSON: {exc}") from exc
     except RecursionError as exc:
@@ -60,7 +62,7 @@ def parse_policy_text(text: str, name: str = "<policy>") -> Any:
         if not isinstance(content, str):
             return content
         try:
-            return json.loads(content)
+            return _jsondepth.loads(content)
         except ValueError as exc:
             raise PolicyError(f"{name}: Policy.Content is not JSON: {exc}") from exc
         except RecursionError as exc:

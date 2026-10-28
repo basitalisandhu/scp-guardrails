@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from . import _miniyaml
+from . import _jsondepth, _miniyaml
 from .catalog import (
     BUDGET_PROTECT_ACTIONS,
     BY_KEY,
@@ -92,7 +92,7 @@ def load_spec(path: Path) -> dict[str, Any]:
     except UnicodeDecodeError as exc:
         raise SpecError(f"{path}: not UTF-8 text (byte {exc.start}); save the spec as UTF-8") from exc
     try:
-        data = json.loads(text) if path.suffix.lower() == ".json" else _miniyaml.load(text)
+        data = _jsondepth.loads(text) if path.suffix.lower() == ".json" else _miniyaml.load(text)
     except (ValueError, _miniyaml.YAMLError) as exc:  # ValueError covers JSONDecodeError
         raise SpecError(f"{path}: cannot parse: {exc}") from exc
     except RecursionError as exc:

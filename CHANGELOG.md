@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-29
+
+### Fixed
+
+- Deeply nested JSON policies and specs are refused with the same "nested too deeply" error on every supported Python. Python 3.14 no longer raises `RecursionError` from `json.loads` at the old depth, so JSON is now checked for nesting first (limit 200 levels) instead of relying on it.
+- CI tests Python 3.11 to 3.14.
+
 ## [0.4.0] - 2026-10-28
 
 ### Added
@@ -74,7 +81,8 @@ First release. The builder, the first twelve lint checks, the guardrail catalogu
 - Default size limit and attachment count follow the AWS Organizations quotas page as checked on 2026-10-04 (10,240 characters, 10 SCPs per target); the skill used 5,120 and 5. Both are configurable.
 - Severities are high, medium and low instead of error, warning and info. Allow with NotAction is medium, since SCPs now accept the element.
 
-[Unreleased]: https://github.com/basitalisandhu/scp-guardrails/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/basitalisandhu/scp-guardrails/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/basitalisandhu/scp-guardrails/compare/v0.4.0...v0.4.1
 [0.3.0]: https://github.com/basitalisandhu/scp-guardrails/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/basitalisandhu/scp-guardrails/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/basitalisandhu/scp-guardrails/releases/tag/v0.1.0

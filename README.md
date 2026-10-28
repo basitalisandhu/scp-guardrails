@@ -60,8 +60,8 @@ uvx --from git+https://github.com/basitalisandhu/scp-guardrails scp-guardrails -
 Container image: each release tag publishes `ghcr.io/basitalisandhu/scp-guardrails` for linux/amd64 and linux/arm64. It runs as uid 1000 in `/work`:
 
 ```bash
-docker run --rm -v "$PWD:/work" ghcr.io/basitalisandhu/scp-guardrails:0.3.0 build --spec spec.yaml --out scps
-docker run --rm -v "$PWD:/work:ro" ghcr.io/basitalisandhu/scp-guardrails:0.3.0 lint policies/
+docker run --rm -v "$PWD:/work" ghcr.io/basitalisandhu/scp-guardrails:0.4.0 build --spec spec.yaml --out scps
+docker run --rm -v "$PWD:/work:ro" ghcr.io/basitalisandhu/scp-guardrails:0.4.0 lint policies/
 ```
 
 ## GitHub Action
@@ -83,7 +83,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: basitalisandhu/scp-guardrails@v0.3.0   # pin to the release commit SHA in production
+      - uses: basitalisandhu/scp-guardrails@v0.4.0   # pin to the release commit SHA in production
         with:
           path: policies/**/*.json
           fail-on: medium
@@ -202,7 +202,22 @@ Details and examples: [docs/rules.md](docs/rules.md).
 | `explain POLICY [--format text\|markdown\|json]` | Plain-English narrative or structured explanation. | 0, 2 bad input |
 | `catalog [--format table\|json\|markdown] [--key KEY]` | The guardrail catalogue. | 0, 2 unknown key |
 
-Every command has `--help`. `python -m scp_guardrails` works too.
+`lint`, `diff` and `explain` read a policy from standard input when the path is `-`, so saved CLI output can be piped straight in: `aws organizations describe-policy --policy-id p-examplepolicyid --output json | scp-guardrails lint -`. Every command has `--help`. `python -m scp_guardrails` works too.
+
+## Troubleshooting
+
+| Message | Cause and fix |
+| --- | --- |
+| `error: allowed_regions must be a list of non-empty strings; write [us-east-1] for a single entry` | A single value where the spec wants a list. Write `allowed_regions: [us-east-1]` or one `- us-east-1` line per entry. |
+| `error: deny_iam_users_outside must be a list of non-empty strings; put numbers such as account ids in quotes ...` | Unquoted account ids are read as numbers and lose leading zeros. Quote them: `["012345678901"]`. |
+| `error: unknown spec keys: ...` | A typo, or policy JSON passed as `--spec`. Spec keys are the guardrail names that `scp-guardrails catalog` lists; policies go to `lint`. |
+| `error: spec.yaml: cannot parse: line N: ...` | The spec reader supports the YAML that specs use (mappings, lists, quoted and block strings, flow lists). Check the named line for a stray `-`, `:` or indentation, or write the spec as JSON. |
+| `error: spec.yaml: not UTF-8 text (byte N); save the spec as UTF-8` | The file was saved as UTF-16 or another encoding (some Windows editors and PowerShell `>` do this). Save it as UTF-8. The same applies to policy files. |
+| `error: the guardrails need N documents of at most M characters, more than max_documents (K) ...` | The statements do not fit on one target. Add `attach_levels: [root, ou]` to spread them, or drop a guardrail. |
+| `error: statement ... alone is N characters, over the M limit` | `max_policy_chars` (or `--max-chars`) is below the size of one statement. Raise it; the AWS quota is 10,240. |
+| `error: no policy files found` or `skipped ...: not an SCP document (no Statement)` | `lint` found no `*.json` under the directory, or skipped files without a `Statement` such as `manifest.json`. Name policy files directly to have them checked even without `Statement`. |
+| `<file>: error: invalid JSON: ...` from `lint` (exit 2) | The file is not JSON, or is `describe-policy` output whose `Content` is not JSON. Save the output with `--output json`. |
+| `error: --management-account '123' is not a 12-digit account id` | Pass the full 12-digit id, in quotes if your shell or YAML might drop leading zeros. |
 
 ## What this is not
 

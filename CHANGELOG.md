@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-28
+
+### Added
+
+- `lint`, `diff` and `explain` read a policy from standard input when the path is `-`, so `aws organizations describe-policy ... | scp-guardrails lint -` works without a temporary file. Findings from standard input still carry line numbers; `diff - -` is refused.
+- README: a Troubleshooting section with the real error messages and their fixes.
+- Tests: seeded, time-bounded fuzz tests over the policy reader (lint, diff, explain) and the spec reader (YAML and JSON); 1x/10x scaling tests for lint, diff, explain and the spec reader; an end-to-end test that installs the built wheel in a fresh venv and runs the README quick start, compared with the README output, in a new `quickstart` CI job.
+
+### Fixed
+
+- Spec reader: a sequence item that consumed no input, such as `- - -:`, made `build` loop for ever; it is now a parse error and `build` exits 2. A flow collection used as a mapping key (`[{x: 1}: 2]`) and an anchor with nothing after it (`--- &x`) no longer raise inside the parser. The same fix as aws-security-skills 0.6.1, whose copy this reader came from.
+- `lint` was quadratic in the number of findings: it scanned the whole file once per finding to find its line. A policy with 3,000 statements and one finding each took 2.44s; it now takes 0.02s (one pass builds a Sid-to-line index).
+- `lint` crashed with `TypeError` on a statement whose `Effect` or `Sid` is a list or an object; these are now SCP-STRUCTURE and SCP-SID-FORMAT findings.
+- `diff` and `explain` crashed with `UnicodeDecodeError` on a file that is not UTF-8, and every command crashed on JSON nested about a thousand levels deep or holding an integer longer than 4,300 digits; `build` crashed the same way on such specs and on non-UTF-8 YAML. All now exit 2 with a message that names the file.
+
 ## [0.3.0] - 2026-10-20
 
 ### Added

@@ -9,13 +9,14 @@ import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from . import __version__, catalog, report
 from .builder import SpecError, build, load_spec, summary_markdown, write_outputs
 from .diff import diff_policies, render_text
 from .explain import explain_policy, explanation_data, render_markdown
 from .lint import SEVERITIES, LintOptions, at_or_above, lint_policy, valid_account
-from .policy import SCP_MAX_CHARS, PolicyError, find_line, load_policy, looks_like_policy, parse_policy_text
+from .policy import SCP_MAX_CHARS, PolicyError, load_policy, looks_like_policy, parse_policy_text, sid_lines
 
 EXIT_OK = 0
 EXIT_FINDINGS = 1
@@ -68,12 +69,12 @@ def build_parser() -> argparse.ArgumentParser:
         "lint",
         help="lint SCP JSON files for lockouts, dead statements and size",
         description="Lint SCP documents (plain JSON or `aws organizations describe-policy` output). Arguments "
-        "can be files, directories (every *.json below them) or quoted glob patterns.",
+        "can be files, directories (every *.json below them), quoted glob patterns or - for standard input.",
         epilog="Exit codes: 0 no finding at or above --fail-on, 1 findings at or above it, 2 bad input.\n"
         "Rules: docs/rules.md. " + EPILOG,
         formatter_class=_Formatter,
     )
-    p.add_argument("paths", nargs="+", help="policy files, directories or glob patterns")
+    p.add_argument("paths", nargs="+", help="policy files, directories, glob patterns, or - for standard input")
     p.add_argument("--format", choices=["table", "json", "sarif"], default="table", help="output format")
     p.add_argument("--output", type=Path, help="write the report here instead of standard output")
     p.add_argument("--sarif", type=Path, help="also write a SARIF 2.1.0 report to this file")
@@ -115,8 +116,8 @@ def build_parser() -> argparse.ArgumentParser:
         epilog="Exit codes: 0 identical, 1 different, 2 bad input.\n" + EPILOG,
         formatter_class=_Formatter,
     )
-    p.add_argument("a", type=Path, help="the old policy")
-    p.add_argument("b", type=Path, help="the new policy")
+    p.add_argument("a", type=Path, help="the old policy (- for standard input)")
+    p.add_argument("b", type=Path, help="the new policy (- for standard input)")
     p.add_argument("--format", choices=["text", "json"], default="text", help="output format")
 
     p = sub.add_parser(
@@ -126,7 +127,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog="Exit codes: 0, 2 bad input.\n" + EPILOG,
         formatter_class=_Formatter,
     )
-    p.add_argument("policy", type=Path, help="policy JSON file")
+    p.add_argument("policy", type=Path, help="policy JSON file (- for standard input)")
     p.add_argument("--format", choices=["text", "markdown", "json"], default="text", help="output format")
 
     p = sub.add_parser(
@@ -146,7 +147,29 @@ def _err(message: str) -> None:
     print(f"error: {message}", file=sys.stderr)
 
 
+STDIN = Path("-")
+
+
+def _read_text(path: Path) -> str:
+    """The file's text, or standard input for `-`. Raises OSError or UnicodeDecodeError."""
+    if path == STDIN:
+        return sys.stdin.buffer.read().decode("utf-8")
+    return path.read_text(encoding="utf-8")
+
+
+def _load(path: Path) -> Any:
+    if path != STDIN:
+        return load_policy(path)
+    try:
+        text = _read_text(path)
+    except UnicodeDecodeError as exc:
+        raise PolicyError(f"<stdin>: not UTF-8 text (byte {exc.start}); save the policy as UTF-8") from exc
+    return parse_policy_text(text, "<stdin>")
+
+
 def _display(path: Path) -> str:
+    if path == STDIN:
+        return "<stdin>"
     try:
         rel = os.path.relpath(path)
     except ValueError:
@@ -161,7 +184,9 @@ def expand_paths(args: Sequence[str]) -> tuple[list[Path], list[Path], list[str]
     errors: list[str] = []
     for arg in args:
         p = Path(arg)
-        if p.is_dir():
+        if arg == "-":
+            explicit.append(STDIN)
+        elif p.is_dir():
             found += sorted(x for x in p.rglob("*.json") if x.is_file())
         elif p.is_file():
             explicit.append(p)
@@ -230,24 +255,31 @@ def cmd_lint(args: argparse.Namespace) -> int:
     results: list[report.FileResult] = []
     seen: set[Path] = set()
     for path, strict in [(p, True) for p in explicit] + [(p, False) for p in found]:
-        key = path.resolve()
+        key = path if path == STDIN else path.resolve()
         if key in seen:
             continue
         seen.add(key)
         shown = _display(path)
         try:
-            text = path.read_text(encoding="utf-8")
+            text = _read_text(path)
             doc = parse_policy_text(text, shown)
-        except (OSError, PolicyError, UnicodeDecodeError) as exc:
+        except UnicodeDecodeError as exc:
+            results.append(report.FileResult(shown, None, error=f"not UTF-8 text (byte {exc.start}); save it as UTF-8"))
+            continue
+        except OSError as exc:
+            results.append(report.FileResult(shown, None, error=f"cannot read: {exc.strerror or exc}"))
+            continue
+        except PolicyError as exc:
             results.append(report.FileResult(shown, None, error=str(exc)))
             continue
         if not strict and not looks_like_policy(doc):
             print(f"skipped {shown}: not an SCP document (no Statement)", file=sys.stderr)
             continue
         findings = lint_policy(doc, opts)
+        lines = sid_lines(text) if findings else {}
         for f in findings:
             f.file = shown
-            f.line = find_line(text, f.sid)
+            f.line = lines.get(f.sid, 1) if f.sid and not f.sid.startswith("#") else 1
         results.append(
             report.FileResult(shown, len(json.dumps(doc, separators=(",", ":"), ensure_ascii=False)), findings)
         )
@@ -282,11 +314,13 @@ def cmd_lint(args: argparse.Namespace) -> int:
 
 def cmd_diff(args: argparse.Namespace) -> int:
     try:
-        a, b = load_policy(args.a), load_policy(args.b)
+        if args.a == STDIN and args.b == STDIN:
+            raise PolicyError("only one of the two policies can be read from standard input")
+        a, b = _load(args.a), _load(args.b)
     except PolicyError as exc:
         _err(str(exc))
         return EXIT_ERROR
-    for name, doc in ((args.a, a), (args.b, b)):
+    for name, doc in ((_display(args.a), a), (_display(args.b), b)):
         if not looks_like_policy(doc):
             _err(f"{name}: not an SCP document (no Statement)")
             return EXIT_ERROR
@@ -297,12 +331,12 @@ def cmd_diff(args: argparse.Namespace) -> int:
 
 def cmd_explain(args: argparse.Namespace) -> int:
     try:
-        doc = load_policy(args.policy)
+        doc = _load(args.policy)
     except PolicyError as exc:
         _err(str(exc))
         return EXIT_ERROR
     if not looks_like_policy(doc):
-        _err(f"{args.policy}: not an SCP document (no Statement)")
+        _err(f"{_display(args.policy)}: not an SCP document (no Statement)")
         return EXIT_ERROR
     name = _display(args.policy)
     if args.format == "json":

@@ -497,11 +497,11 @@ def lint_policy(doc: Any, opts: LintOptions | None = None) -> list[Finding]:
                 out.append(
                     _finding("SCP-SID-FORMAT", f"Sid {st['Sid']!r} has characters other than letters and digits", sid)
                 )
-            if st["Sid"] in seen:
+            if str(st["Sid"]) in seen:
                 out.append(_finding("SCP-DUPLICATE-SID", f"Sid {st['Sid']!r} is used more than once", sid))
             seen.add(str(st["Sid"]))
         effect = st.get("Effect")
-        if effect not in {"Allow", "Deny"}:
+        if not isinstance(effect, str) or effect not in {"Allow", "Deny"}:
             out.append(_finding("SCP-STRUCTURE", f"Effect must be Allow or Deny, got {effect!r}", sid))
             continue
         if ("Action" in st) == ("NotAction" in st):

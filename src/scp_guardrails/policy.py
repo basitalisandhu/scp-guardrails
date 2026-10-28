@@ -51,16 +51,20 @@ def parse_policy_text(text: str, name: str = "<policy>") -> Any:
     """Parse an SCP document, or the output of `aws organizations describe-policy` (its Content string)."""
     try:
         data = json.loads(text)
-    except json.JSONDecodeError as exc:
+    except ValueError as exc:  # JSONDecodeError, or an integer longer than Python reads
         raise PolicyError(f"{name}: invalid JSON: {exc}") from exc
+    except RecursionError as exc:
+        raise PolicyError(f"{name}: invalid JSON: nested too deeply to read") from exc
     if isinstance(data, dict) and isinstance(data.get("Policy"), dict) and "Content" in data["Policy"]:
         content = data["Policy"]["Content"]
         if not isinstance(content, str):
             return content
         try:
             return json.loads(content)
-        except json.JSONDecodeError as exc:
+        except ValueError as exc:
             raise PolicyError(f"{name}: Policy.Content is not JSON: {exc}") from exc
+        except RecursionError as exc:
+            raise PolicyError(f"{name}: Policy.Content is nested too deeply to read") from exc
     return data
 
 
@@ -69,6 +73,8 @@ def load_policy(path: Path) -> Any:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
         raise PolicyError(f"{path}: cannot read: {exc.strerror or exc}") from exc
+    except UnicodeDecodeError as exc:
+        raise PolicyError(f"{path}: not UTF-8 text (byte {exc.start}); save the policy as UTF-8") from exc
     return parse_policy_text(text, str(path))
 
 
@@ -138,6 +144,18 @@ def sid_of(st: Any, index: int) -> str:
     if isinstance(st, dict) and isinstance(st.get("Sid"), str) and st["Sid"]:
         return st["Sid"]
     return f"#{index}"
+
+
+_SID_LINE_RE = re.compile(r'"Sid"\s*:\s*"([^"\\]*)"')
+
+
+def sid_lines(text: str) -> dict[str, int]:
+    """Map every Sid written in the source text to the 1-based line of its first occurrence, in one pass."""
+    lines: dict[str, int] = {}
+    for no, line in enumerate(text.splitlines(), 1):
+        for match in _SID_LINE_RE.finditer(line):
+            lines.setdefault(match.group(1), no)
+    return lines
 
 
 def find_line(text: str, sid: str | None) -> int:
